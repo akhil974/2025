@@ -1,80 +1,66 @@
-import requests
-
-url = "https://disease.sh/v3/covid-19/countries/usa"
-r = requests.get(url)
-data = r.json()
-
-print(data)
-
-import pandas as pd
-
-# Extract relevant fields
-covid_data = {
-    "cases": data["cases"],
-    "todayCases": data["todayCases"],
-    "deaths": data["deaths"],
-    "todayDeaths": data["todayDeaths"],
-    "recovered": data["recovered"],
-    "active": data["active"],
-    "critical": data["critical"],
-    "casesPerMillion": data["casesPerOneMillion"],
-    "deathsPerMillion": data["deathsPerOneMillion"],
-}
-
-# Convert to Pandas DataFrame
-df = pd.DataFrame([covid_data])
-print(df)
-
-import matplotlib.pyplot as plt
-
-labels = ["Total Cases", "Active Cases", "Recovered", "Deaths"]
-values = [data["cases"], data["active"], data["recovered"], data["deaths"]]
-
-plt.figure(figsize=(8,5))
-plt.bar(labels, values, color=['blue', 'orange', 'green', 'red'])
-plt.xlabel("Category")
-plt.ylabel("Count")
-plt.title("COVID-19 Data for USA")
-plt.show()
-
-import numpy as np
-
-# Generate random historical data
-np.random.seed(42)
-historical_cases = np.random.randint(30000, 70000, size=30)  # Last 30 days cases
-historical_deaths = np.random.randint(500, 2000, size=30)
-
-df_historical = pd.DataFrame({"cases": historical_cases, "deaths": historical_deaths})
-df_historical["day"] = range(1, 31)
-
-print(df_historical.head())
-
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-
-X = df_historical[["day"]]
-y = df_historical["cases"]
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-model = LinearRegression()
-model.fit(X_train, y_train)
-
-# Predict next day's cases
-next_day = np.array([[31]])
-predicted_cases = model.predict(next_day)
-print(f"Predicted cases for Day 31: {int(predicted_cases[0])}")
-
 import streamlit as st
+import numpy as np
+import pandas as pd
+from sklearn.svm import SVR
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import fetch_california_housing
 
-st.title("COVID-19 Cases Prediction-in USA")
-st.write("Predicting COVID-19 cases for the next day based on historical data.")
+# Load the California housing dataset
+data = fetch_california_housing()
+X = pd.DataFrame(data.data, columns=data.feature_names)
+y = pd.Series(data.target)
 
-# User Input
-day_input = st.number_input("Enter day number (e.g., 31 for prediction)", min_value=1, max_value=100)
+# Standardize the data
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-if st.button("Predict"):
-    prediction = model.predict([[day_input]])
-    st.write(f"Predicted cases for day {day_input}: {int(prediction[0])}")
+# Train the SVM regression model
+svm_regressor = SVR(kernel='rbf')
+svm_regressor.fit(X_scaled, y)
 
+# Streamlit UI for user input
+st.title("California Housing Price Prediction with SVM Regression")
+st.write("This app predicts the housing price based on several features.")
 
+# Input fields for user to enter feature values
+avg_rooms = st.number_input("Average Rooms per Household", min_value=1.0, max_value=10.0, step=0.1)
+avg_income = st.number_input("Average Income per Household ($10,000)", min_value=1.0, max_value=15.0, step=0.1)
+avg_house_age = st.number_input("Average House Age (years)", min_value=1, max_value=100, step=1)
+population = st.number_input("Population", min_value=1, max_value=5000, step=1)
+households = st.number_input("Number of Households", min_value=1, max_value=3000, step=1)
+latitude = st.number_input("Latitude", min_value=32.0, max_value=34.5, step=0.1)
+longitude = st.number_input("Longitude", min_value=-118.5, max_value=-116.5, step=0.1)
+
+# Prepare the input data as a numpy array
+user_input = np.array([[avg_rooms, avg_income, avg_house_age, population, households, latitude, longitude]])
+user_input_scaled = scaler.transform(user_input)
+
+# Make the prediction
+prediction = svm_regressor.predict(user_input_scaled)
+
+# Display the predicted housing price
+st.write(f"The predicted housing price is: **${prediction[0]:,.2f}**")
+
+# Option to show the model performance metrics (e.g., R², MSE)
+if st.checkbox("Show Model Performance Metrics"):
+    from sklearn.metrics import mean_squared_error, r2_score
+
+    # Predictions on the test set (using the entire dataset for demonstration)
+    y_pred = svm_regressor.predict(X_scaled)
+
+    # Model performance metrics
+    mse = mean_squared_error(y, y_pred)
+    r2 = r2_score(y, y_pred)
+
+    st.write(f"Mean Squared Error: {mse}")
+    st.write(f"R² Score: {r2}")
+
+    # Plot true vs predicted values
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(8, 6))
+    plt.scatter(y, y_pred, color='blue', alpha=0.5)
+    plt.plot([min(y), max(y)], [min(y), max(y)], color='red', linestyle='--')
+    plt.xlabel('True Values')
+    plt.ylabel('Predicted Values')
+    plt.title('True vs Predicted Housing Prices (SVM Regression)')
+    st.pyplot(plt)
